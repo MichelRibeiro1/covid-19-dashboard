@@ -43,6 +43,10 @@ dataset_br_summarized <- ddply(
     total_casos = max(casosAcumulado, na.rm = TRUE),
     total_obitos = max(obitosAcumulado, na.rm = TRUE)
 )
+total_casos_br <- sum(dataset_br_summarized["total_casos"])
+total_obitos_br <- sum(dataset_br_summarized["total_obitos"])
+taxa_mortalidade <- total_obitos_br / total_casos_br
+
 sorted_casos_br <- dataset_br_summarized[order(dataset_br_summarized$total_casos, decreasing = TRUE),]
 sorted_obitos_br <- dataset_br_summarized[order(dataset_br_summarized$total_obitos, decreasing = TRUE),]
 
@@ -59,7 +63,17 @@ ui <- dashboardPage(
             tabItem(
                 tabName = "dados_nacionais",
                 fluidRow(
-                    infoBox("New Orders", 10 * 2, icon = icon("credit-card")),
+                    infoBox("Total de casos", format(total_casos_br, big.mark = ".", decimal.mark = ","), icon = icon("viruses")),
+                    infoBox("Total de óbitos", format(total_obitos_br, big.mark = ".", decimal.mark = ","), icon = icon("heart")),
+                    infoBox(
+                        "Taxa de Mortalidade",
+                        paste(
+                            format(taxa_mortalidade * 100, digits = 2, nsmall = 2),
+                            "%"
+                        ),
+                        icon = icon("percent")),
+                ),
+                fluidRow(
                     box(plotOutput("casosBrasil"), width = 12)
                 ),
                 fluidRow(
@@ -87,7 +101,13 @@ server <- function(input, output) {
             ylim = c(0, 1.45*max(sorted_casos_br$total_casos)),
             width = 0.85
         )
-        text(bars_br, sorted_casos_br$total_casos, sorted_casos_br$total_casos, pos = 3, cex = 1)
+        text(
+            bars_br,
+            sorted_casos_br$total_casos,
+            format(sorted_casos_br$total_casos, decimal.mark = ",", big.mark = "."),
+            pos = 3,
+            cex = 1
+        )
     })
     
     output$obitosBrasil <- renderPlot({
@@ -98,7 +118,13 @@ server <- function(input, output) {
             ylim = c(0, 1.45*max(sorted_obitos_br$total_obitos)),
             width = 0.85,
         )
-        text(bars_obitos_br, sorted_obitos_br$total_obitos, sorted_obitos_br$total_obitos, pos = 3, cex = 1)
+        text(
+            bars_obitos_br,
+            sorted_obitos_br$total_obitos,
+            format(sorted_obitos_br$total_obitos, decimal.mark = ",", big.mark = "."),
+            pos = 3,
+            cex = 1
+        )
     })
 
     output$casosBahia <- renderPlot({
@@ -110,7 +136,13 @@ server <- function(input, output) {
             ylim = c(0, 1.1*max(sorted_10$freq)),
             cex.names = 0.8
         )
-        text(bars, sorted_10$freq, sorted_10$freq, pos = 3, cex = 1)
+        text(
+            bars,
+            sorted_10$freq,
+            format(sorted_10$freq, decimal.mark = ",", big.mark = "."),
+            pos = 3,
+            cex = 1
+        )
     })
 }
 
