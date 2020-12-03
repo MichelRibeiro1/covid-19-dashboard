@@ -27,7 +27,7 @@ row.names(ufs2) <- ufs$sigla
 
 #load datasets
 dataset_casos_ba <- read.csv2(
-    file = "dataset_casos_ba.csv",
+    file = "./datasets/dataset_casos_ba.csv",
     header = TRUE,
     sep = ";",
     na.strings = NA,
@@ -35,7 +35,7 @@ dataset_casos_ba <- read.csv2(
 )
 
 dataset_obitos_ba <- read.csv2(
-    file = "dataset_obitos_ba.csv",
+    file = "./datasets/dataset_obitos_ba.csv",
     header = TRUE,
     sep = ";",
     na.strings = NA,
@@ -43,7 +43,7 @@ dataset_obitos_ba <- read.csv2(
 )
 
 casos_obitos_br <- read.csv2(
-    file = "covid_brasil_casos_obitos.csv",
+    file = "./datasets/covid_brasil_casos_obitos.csv",
     header = TRUE,
     sep = ";",
     na.strings = NA,
@@ -51,7 +51,7 @@ casos_obitos_br <- read.csv2(
 )
 
 dataset_salvador <- read.csv2(
-    file = "salvador.csv",
+    file = "./datasets/salvador.csv",
     header = TRUE,
     sep = ",",
     na.strings = NA,
@@ -59,7 +59,7 @@ dataset_salvador <- read.csv2(
 )
 
 dataset_salvador_geral <- read.csv2(
-    file = "./dados_gerais_salvador.csv",
+    file = "./datasets/dados_gerais_salvador.csv",
     header = TRUE,
     sep = ";",
     na.strings = NA,
