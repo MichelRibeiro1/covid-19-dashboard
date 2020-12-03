@@ -8,6 +8,7 @@
 #
 library("ggplot2")
 library("shiny")
+library("shinyjs")
 library("dplyr")
 library("shinydashboard")
 library("reshape2")
@@ -65,6 +66,18 @@ dataset_salvador_geral <- read.csv2(
     na.strings = NA,
     dec = ",",
 )
+
+dataset_dados_bairros_ibge <- read.csv2(
+    file = "./datasets/bairros-renda-raca-cor-ibge.csv",
+    header = TRUE,
+    sep = ",",
+    na.strings = NA,
+    dec = ",",
+)
+
+# IBGE
+row.names(dataset_dados_bairros_ibge) <- dataset_dados_bairros_ibge$BAIRRO
+# IBGE - fim
 
 casos_obitos_br <- na.omit(casos_obitos_br)
 casos_obitos_br$uf <- with(casos_obitos_br, ufs[estado, "sigla"])
@@ -170,10 +183,13 @@ ui <- dashboardPage(
                 icon = icon("chart-bar"),
                 menuSubItem("Informações Gerais", tabName = "geral"),
                 menuSubItem("Salvador", tabName = "salvador")
-            )
+            ),
+            menuItem("Datasets", href = "https://github.com/MichelRibeiro1/covid-19-dashboard/tree/master/dash/datasets", icon = icon("database")),
+            menuItem("Contribuidores", tabName = "contribuidores", icon = icon("users"))
         )
     ),
     dashboardBody(
+        shinyjs::useShinyjs(),
         tabItems(
             tabItem(
                 tabName = "home",
@@ -209,7 +225,7 @@ ui <- dashboardPage(
                         ),
                         icon = icon("percent")
                     ),
-                    
+
                     box(plotOutput("pizzaCasosSexo"), width = 6, title = "CASOS CONFIRMADOS POR SEXO"),
                     box(plotOutput("pizzaObitosSexo"), width = 6, title = "ÓBITOS POR SEXO"),
                     box(plotOutput("pizzaObitosRacaCor"), width = 6, title = "CASOS POR RAÇA/COR AUTODECLARADA"),
@@ -263,6 +279,8 @@ ui <- dashboardPage(
                     box(tableOutput("bairrosCasos") , width = 4, align = "center"),
                     box(tableOutput("bairrosCasos2") , width = 4, align = "center"),
                     box(tableOutput("bairrosCasos3") , width = 4, align = "center"),
+                    box(plotOutput("pizzaCasosBairroGrupoRenda"), width = 6),
+                    box(plotOutput("pizzaCasosBairroGrupoRaca"), width = 6),
                     box(plotOutput("salvador_principais_bairros_casos_totais"), width = 12),
                     box(plotOutput("salvador_principais_bairros_inc"), width = 12)
                 )
@@ -306,7 +324,7 @@ server <- function(input, output) {
                         dadosBahia <- dataset_br_summarized_by_uf_data[dataset_br_summarized_by_uf_data$uf == estado, ]
                         dadosBahia <- dadosBahia[order(dadosBahia$data, decreasing = FALSE), ]
                         dadosBahia$cumsum <- cumsum(dadosBahia$total_casos)
-                        
+
                         ggplot(dadosBahia, aes(x = data, y = cumsum)) +
                             geom_line() +
                             ggtitle("NÚMERO DE CASOS CONFIRMADOS AO LONDO DO TEMPO") +
@@ -317,30 +335,80 @@ server <- function(input, output) {
             )
         })
     })
-    
+
+    output$pizzaCasosBairroGrupoRenda <- renderPlot({
+        ranking <- head(dataset_salvador[order(dataset_salvador$X06.09, decreasing = TRUE), c("BAIRRO", "X06.09")], 29)
+        ranking$renda <- with(ranking, dataset_dados_bairros_ibge[BAIRRO, "RENDA.MENOR.1.SL"])
+
+        dados <- summarise(
+            group_by(ranking, renda),
+            total_casos = sum(X06.09, na.rm = TRUE),
+        )
+
+        dados <- dados %>%
+            arrange(desc(renda)) %>%
+            mutate(prop = total_casos / sum(dados$total_casos) * 100) %>%
+            mutate(ypos = cumsum(prop) - 0.5 * prop)
+
+        dados[["PERCENTUAL"]] <- dados$renda
+
+        ggplot(dados, aes(x = "", y = prop, fill = PERCENTUAL)) +
+            geom_bar(stat = "identity", width = 1, color = "white") +
+            coord_polar("y", start = 0) +
+            theme_void() +
+            ggtitle("CASOS CONFIRMADOS POR PERCENTUAL DE HABITANTES DO BAIRRO\nCOM RENDA INFERIOR A 1 SALÁRIO MÍNIMO", subtitle = "Foram considerados os 30 bairros com mais casos confirmados") +
+            geom_text(aes(y = ypos, label = str_c(format(prop, digits = 2), "%")), color = "white", size = 6) +
+            scale_fill_brewer(palette = "Set1")
+    })
+
+    output$pizzaCasosBairroGrupoRaca <- renderPlot({
+            ranking <- head(dataset_salvador[order(dataset_salvador$X06.09, decreasing = TRUE), c("BAIRRO", "X06.09")], 29)
+            ranking$percBranco <- with(ranking, dataset_dados_bairros_ibge[BAIRRO, "PERCENTUAL.HABITANTES.BRANCO"])
+
+            dados <- summarise(
+                group_by(ranking, percBranco),
+                total_casos = sum(X06.09, na.rm = TRUE),
+            )
+
+            dados <- dados %>%
+                arrange(desc(percBranco)) %>%
+                mutate(prop = total_casos / sum(dados$total_casos) * 100) %>%
+                mutate(ypos = cumsum(prop) - 0.5 * prop)
+
+            dados[["PERCENTUAL"]] <- dados$percBranco
+
+            ggplot(dados, aes(x = "", y = prop, fill = PERCENTUAL)) +
+                geom_bar(stat = "identity", width = 1, color = "white") +
+                coord_polar("y", start = 0) +
+                theme_void() +
+                ggtitle("CASOS CONFIRMADOS POR PERCENTUAL DE HABITANTES DE COR BRANCA DO BAIRRO", subtitle = "Foram considerados os 30 bairros com mais casos confirmados") +
+                geom_text(aes(y = ypos, label = str_c(format(prop, digits = 2), "%")), color = "white", size = 6) +
+                scale_fill_brewer(palette = "Set1")
+    })
+
     aux_casos_ssa <- function (page) {
         ranking <- head(dataset_salvador[order(dataset_salvador$X06.09, decreasing = TRUE), c("BAIRRO", "X06.09")], 29)
         ranking[30, ] <- c("OUTROS", total_casos_ssa - sum(ranking$X06.09))
         ranking[["%"]] <- format((as.numeric(ranking$X06.09) / total_casos_ssa) * 100, digits = 2, nsmall = 2)
-        
+
         ranking$CASOS <- format(ranking$X06.09, decimal.mark = ",", big.mark = ".")
         ranking$X06.09 <- NULL
         ranking$POSIÇÃO <- 1:30
         ranking <- ranking[, c("POSIÇÃO", "BAIRRO", "CASOS", "%")]
-        
+
         limit <- page * 10
         start <- limit - 9
         ranking[start:limit, ]
     }
-    
+
     output$bairrosCasos <- renderTable({
         aux_casos_ssa(1)
     })
-    
+
     output$bairrosCasos2 <- renderTable({
         aux_casos_ssa(2)
     })
-    
+
     output$bairrosCasos3 <- renderTable({
         aux_casos_ssa(3)
     })
@@ -351,23 +419,23 @@ server <- function(input, output) {
             ggtitle("NÚMERO DE CASOS AO LONGO DO TEMPO POR BAIRRO") +
             labs(y = "NÚMERO DE CASOS", x = "DATA")
     })
-    
+
     output$salvador_principais_bairros_inc <- renderPlot({
         ggplot(pincipais_bairros_dados, aes(x = data, y = inc, group = BAIRRO)) +
             geom_line(aes(color = BAIRRO), size = 2) +
             ggtitle("COEFICIENTE DE INCIDÊNCIA POR MIL HABITANTES AO LONGO DO TEMPO POR BAIRRO") +
             labs(y = "COEFICIENTE DE INCIDÊNCIA", x = "DATA")
     })
-    
+
     output$salvadorCasosSexo <- renderPlot({
         casos_sexo_ssa <- count(dataset_salvador_geral, SEXO)
         casos_sexo_ssa <- casos_sexo_ssa[casos_sexo_ssa$n > 1000, ]
         casos_sexo_ssa$SEXO <- with(casos_sexo_ssa, ifelse(SEXO == "F", "FEMININO", "MASCULINO"))
-        casos_sexo_ssa <- casos_sexo_ssa %>% 
+        casos_sexo_ssa <- casos_sexo_ssa %>%
             arrange(desc(SEXO)) %>%
             mutate(prop = n / sum(casos_sexo_ssa$n) * 100) %>%
             mutate(ypos = cumsum(prop) - 0.5 * prop )
-        
+
         ggplot(casos_sexo_ssa, aes(x = "", y = prop, fill = SEXO)) +
             geom_bar(stat = "identity", width = 1, color = "white") +
             coord_polar("y", start = 0) +
@@ -375,14 +443,14 @@ server <- function(input, output) {
             geom_text(aes(y = ypos, label = str_c(format(prop, digits = 2),"%")), color = "white", size = 6) +
             scale_fill_brewer(palette = "Set1")
     })
-    
+
     output$salvadorCasosRaca <- renderPlot({
         casos_raca_ssa <- count(dataset_salvador_geral, RACA_COR)
-        casos_raca_ssa <- casos_raca_ssa %>% 
+        casos_raca_ssa <- casos_raca_ssa %>%
             arrange(desc(RACA_COR)) %>%
             mutate(prop = n / sum(casos_raca_ssa$n) * 100) %>%
             mutate(ypos = cumsum(prop) - 0.5 * prop )
-        
+
         ggplot(casos_raca_ssa, aes(x = "", y = prop, fill = RACA_COR)) +
             geom_bar(stat = "identity", width = 1, color = "white") +
             coord_polar("y", start = 0) +
@@ -390,21 +458,21 @@ server <- function(input, output) {
             geom_text(aes(y = ypos, label = ifelse(prop > 1, str_c(format(prop, digits = 2),"%"), "")), color = "black", size = 6) +
             scale_fill_brewer(palette = "Set1")
     })
-    
+
     output$casosBrasil <- renderPlot({
+        shinyjs::addClass(selector = "body", class = "sidebar-collapse")
         bars_br <- barplot(
             sorted_casos_br$total_casos,
             names.arg = sorted_casos_br$uf,
             main = "CASOS CONFIRMADOS POR UF",
             ylim = c(0, 1.45*max(sorted_casos_br$total_casos)),
-            width = 0.85,
             ylab = "TOTAL DE CASOS",
             xlab = "UF"
         )
         text(
             bars_br,
             sorted_casos_br$total_casos,
-            format(sorted_casos_br$total_casos, decimal.mark = ",", big.mark = "."),
+            str_c(format((sorted_casos_br$total_casos / sum(sorted_casos_br$total_casos)) * 100, digits = 0), "%"),
             pos = 3,
             cex = 1
         )
@@ -430,6 +498,7 @@ server <- function(input, output) {
     })
 
     output$casosBahia <- renderPlot({
+        shinyjs::addClass(selector = "body", class = "sidebar-collapse")
         bars <- barplot(
             sorted_10$n,
             names.arg = sorted_10$MUNICIPIO.DE.RESIDENCIA,
@@ -448,7 +517,7 @@ server <- function(input, output) {
             cex = 1
         )
     })
-    
+
     output$obitosBahia <- renderPlot({
         bars <- barplot(
             sorted_10_obitos$n,
@@ -468,15 +537,15 @@ server <- function(input, output) {
             cex = 1
         )
     })
-    
+
     output$pizzaCasosSexo <- renderPlot({
         ba_casos_sexo <- count(dataset_casos_ba, SEXO)
         ba_casos_sexo <- ba_casos_sexo[ba_casos_sexo$n > 1000, ]
-        ba_casos_sexo <- ba_casos_sexo %>% 
+        ba_casos_sexo <- ba_casos_sexo %>%
             arrange(desc(SEXO)) %>%
             mutate(prop = n / sum(ba_casos_sexo$n) *100) %>%
             mutate(ypos = cumsum(prop)- 0.5*prop )
-        
+
         ggplot(ba_casos_sexo, aes(x = "", y = prop, fill = SEXO), title("Casos")) +
             geom_bar(stat = "identity", width = 1, color = "white") +
             coord_polar("y", start = 0) +
@@ -484,7 +553,7 @@ server <- function(input, output) {
             geom_text(aes(y = ypos, label = str_c(format(prop, digits = 2),"%")), color = "white", size = 6) +
             scale_fill_brewer(palette = "Set1")
     })
-    
+
     output$pizzaObitosSexo <- renderPlot({
         ba_obitos_sexo <- count(dataset_obitos_ba, SEXO)
         ba_obitos_sexo$SEXO <- with(ba_obitos_sexo, ifelse(SEXO == "F", "FEMININO", "MASCULINO"))
@@ -492,7 +561,7 @@ server <- function(input, output) {
             arrange(desc(SEXO)) %>%
             mutate(prop = n / sum(ba_obitos_sexo$n) *100) %>%
             mutate(ypos = cumsum(prop)- 0.5*prop )
-        
+
         ggplot(ba_obitos_sexo, aes(x = "", y = prop, fill = SEXO)) +
             geom_bar(stat = "identity", width = 1, color = "white") +
             coord_polar("y", start = 0) +
@@ -500,15 +569,15 @@ server <- function(input, output) {
             geom_text(aes(y = ypos, label = str_c(format(prop, digits = 2),"%")), color = "white", size = 6) +
             scale_fill_brewer(palette = "Set1")
     })
-    
+
     output$pizzaObitosRacaCor <- renderPlot({
         casos_raca_ba <- count(dataset_casos_ba, RACA.COR)
-        
+
         casos_raca_ba <- casos_raca_ba %>%
             arrange(desc(RACA.COR)) %>%
             mutate(prop = n / sum(casos_raca_ba$n) * 100) %>%
             mutate(ypos = cumsum(prop)- 0.5*prop )
-        
+
         ggplot(casos_raca_ba, aes(x = "", y = prop, fill = RACA.COR),) +
             geom_bar(stat = "identity", width = 1, color = "white") +
             coord_polar("y", start = 0) +
@@ -516,12 +585,12 @@ server <- function(input, output) {
             geom_text(aes(y = ypos, label = ifelse(prop > 3, str_c(format(prop, digits = 2),"%"), paste(""))), color = "black", size = 6) +
             scale_fill_brewer(palette = "Set1")
     })
-    
+
     output$pizzaBaRacaCor <- renderPlot({
         df_bahia_raca <- data.frame( RAÇA.COR = c("AMARELA OU INDIGENA", "BRANCA", "INDIGENA", "NÃO INFORMADO", "PARDA", "PRETA"), prop = c(0.6, 20.3, 0, 0, 63.4, 15.7))
         df_bahia_raca <- df_bahia_raca %>%
             mutate(ypos = cumsum(prop)- 0.5*prop)
-        
+
         ggplot(df_bahia_raca, aes(x = "", y = prop, fill = RAÇA.COR),) +
             geom_bar(stat = "identity", width = 1, color = "white") +
             coord_polar("y", start = 0) +
@@ -531,5 +600,5 @@ server <- function(input, output) {
     })
 }
 
-# Run the application 
+# Run the application
 shinyApp(ui = ui, server = server)
