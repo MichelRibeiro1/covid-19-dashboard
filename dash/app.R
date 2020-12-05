@@ -151,7 +151,7 @@ melted$data <- as.Date(as.character(melted$variable), format = "%d.%m")
 melted$variable <- NULL
 melted$inc <- with(melted, (1000 / salvador_pop[BAIRRO, "POPULAÇÃO"]) * value)
 melted <- na.omit(melted)
-pincipais_bairros <- c("PITUBA", "CAMINHO DAS ÁRVORES", "GRAÇA", "ITAIGARA", "STELLA MARIS", "VALERIA", "PERNAMBUÉS", "LIBERDADE", "FAZENDA GRANDE DO RETIRO", "LOBATO")
+pincipais_bairros <- c("PITUBA", "CAMINHO DAS ÁRVORES", "GRAÇA", "ITAIGARA", "STELLA MARIS", "VALERIA", "PERNAMBUÉS", "LIBERDADE", "FAZENDA GRANDE DO RETIRO", "LOBATO", "BROTAS")
 pincipais_bairros_dados <- melted[melted$BAIRRO %in% pincipais_bairros, ]
 BAIRRO <- factor(pincipais_bairros_dados$BAIRRO)
 
@@ -172,13 +172,13 @@ ui <- dashboardPage(
         sidebarMenu(
             menuItem("Home", tabName = "home", icon = icon("dashboard")),
             menuItem(
-                "Dados Nacionais",
+                "Estados",
                 tabName = "dados_nacionais",
                 icon = icon("chart-bar"),
                 do.call(tagList, estadosSubItemList)
             ),
             menuItem(
-                "Dados Estaduais da Bahia",
+                "Dados da Bahia",
                 tabName = "dados_estaduais",
                 icon = icon("chart-bar"),
                 menuSubItem("Informações Gerais", tabName = "geral"),
@@ -281,6 +281,7 @@ ui <- dashboardPage(
                     box(tableOutput("bairrosCasos3") , width = 4, align = "center"),
                     box(plotOutput("pizzaCasosBairroGrupoRenda"), width = 6),
                     box(plotOutput("pizzaCasosBairroGrupoRaca"), width = 6),
+                    box(plotOutput("salvador_bairros"), width = 12),
                     box(plotOutput("salvador_principais_bairros_casos_totais"), width = 12),
                     box(plotOutput("salvador_principais_bairros_inc"), width = 12)
                 )
@@ -381,7 +382,7 @@ server <- function(input, output) {
                 geom_bar(stat = "identity", width = 1, color = "white") +
                 coord_polar("y", start = 0) +
                 theme_void() +
-                ggtitle("CASOS CONFIRMADOS POR PERCENTUAL DE HABITANTES DE COR BRANCA DO BAIRRO", subtitle = "Foram considerados os 30 bairros com mais casos confirmados") +
+                ggtitle("CASOS CONFIRMADOS POR PERCENTUAL DE HABITANTES \nDE COR BRANCA DO BAIRRO", subtitle = "Foram considerados os 30 bairros com mais casos confirmados") +
                 geom_text(aes(y = ypos, label = str_c(format(prop, digits = 2), "%")), color = "white", size = 6) +
                 scale_fill_brewer(palette = "Set1")
     })
@@ -413,6 +414,17 @@ server <- function(input, output) {
         aux_casos_ssa(3)
     })
 
+    output$salvador_bairros <- renderPlot({
+        ranking <- head(dataset_salvador[order(dataset_salvador$X06.09, decreasing = TRUE), ], 20)
+        ranking_names <- ranking$BAIRRO
+        pincipais_bairros_30 <- melted[melted$BAIRRO %in% ranking_names & melted$data <= as.Date("01/06/2020", format = "%d/%m/%Y") & melted$data >= as.Date("16/04/2020", format = "%d/%m/%Y"), ]
+        ggplot(pincipais_bairros_30, aes(x = data, y = value, group = BAIRRO)) +
+            geom_line(aes(color = BAIRRO), size = 2) +
+            theme(legend.position="bottom") +
+            ggtitle("NÚMERO DE CASOS AO LONGO DOS PRIMEIROS MESES POR BAIRRO") +
+            labs(y = "NÚMERO DE CASOS", x = "DATA")
+    })
+    
     output$salvador_principais_bairros_casos_totais <- renderPlot({
         ggplot(pincipais_bairros_dados, aes(x = data, y = value, group = BAIRRO)) +
             geom_line(aes(color = BAIRRO), size = 2) +
